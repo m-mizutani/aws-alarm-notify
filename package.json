@@ -5,7 +5,7 @@
     "aws-alarm-notify": "bin/aws-alarm-notify.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc; make",
     "watch": "tsc -w",
     "test": "jest",
     "cdk": "cdk"
