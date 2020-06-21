@@ -22,6 +22,9 @@ type arguments struct {
 }
 
 func main() {
+	logger.SetLevel(logrus.InfoLevel)
+	logger.SetFormatter(&logrus.JSONFormatter{})
+
 	lambda.Start(func(ctx context.Context, event events.SQSEvent) error {
 		args := arguments{
 			Event: event,
@@ -40,29 +43,39 @@ func main() {
 	})
 }
 
+type snsMessage struct {
+	Message          string `json:"Message"`
+	MessageID        string `json:"MessageId"`
+	Signature        string `json:"Signature"`
+	SignatureVersion string `json:"SignatureVersion"`
+	SigningCertURL   string `json:"SigningCertURL"`
+	Timestamp        string `json:"Timestamp"`
+	TopicArn         string `json:"TopicArn"`
+	Type             string `json:"Type"`
+	UnsubscribeURL   string `json:"UnsubscribeURL"`
+}
+
 func handler(args arguments) error {
 	logger.WithField("args", args).Info("Start handler")
 
 	for _, sqsRecord := range args.Event.Records {
-		var snsEvent events.SNSEvent
+		var message snsMessage
 
-		if err := json.Unmarshal([]byte(sqsRecord.Body), &snsEvent); err != nil {
+		if err := json.Unmarshal([]byte(sqsRecord.Body), &message); err != nil {
 			logger.WithField("body", sqsRecord.Body).WithError(err).Error("Failed")
 			return errors.Wrap(err, "Fail to unmarshal SQS body")
 		}
 
-		for _, snsRecord := range snsEvent.Records {
-			var alarm cloudWatchAlarm
-			if err := json.Unmarshal([]byte(snsRecord.SNS.Message), &alarm); err != nil {
-				logger.WithField("message", snsRecord.SNS.Message).WithError(err).Error("Failed")
-				return errors.Wrap(err, "Fail to unmarshal SNS message in SQS")
-			}
-
-			if err := postAlarm(args.post, args.SlackURL, alarm); err != nil {
-				return err
-			}
+		var alarm cloudWatchAlarm
+		if err := json.Unmarshal([]byte(message.Message), &alarm); err != nil {
+			logger.WithField("message", message.Message).WithError(err).Error("Failed")
+			return errors.Wrap(err, "Fail to unmarshal SNS message in SQS")
 		}
 
+		if err := postAlarm(args.post, args.SlackURL, alarm); err != nil {
+			return err
+
+		}
 	}
 	return nil
 }
